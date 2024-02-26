@@ -1,0 +1,29 @@
+{
+	"name": "ds_raw_weather_csv",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "ls_adls_uberreportingdl",
+			"type": "LinkedServiceReference"
+		},
+		"folder": {
+			"name": "Raw"
+		},
+		"annotations": [],
+		"type": "DelimitedText",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobFSLocation",
+				"fileName": "data.csv",
+				"folderPath": "weather",
+				"fileSystem": "raw"
+			},
+			"columnDelimiter": ",",
+			"rowDelimiter": "\n",
+			"escapeChar": "\\",
+			"firstRowAsHeader": true,
+			"quoteChar": "\""
+		},
+		"schema": []
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

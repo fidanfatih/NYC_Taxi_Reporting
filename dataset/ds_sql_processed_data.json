@@ -1,0 +1,250 @@
+{
+	"name": "ds_sql_processed_data",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "ls_sql_processed_data",
+			"type": "LinkedServiceReference"
+		},
+		"folder": {
+			"name": "Sql"
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": [
+			{
+				"name": "vendor",
+				"type": "nvarchar"
+			},
+			{
+				"name": "ratecode_description",
+				"type": "nvarchar"
+			},
+			{
+				"name": "payment_type_description",
+				"type": "nvarchar"
+			},
+			{
+				"name": "trip_type_description",
+				"type": "nvarchar"
+			},
+			{
+				"name": "store_and_fwd_flag",
+				"type": "nvarchar"
+			},
+			{
+				"name": "PU_datetime",
+				"type": "datetime",
+				"precision": 23,
+				"scale": 3
+			},
+			{
+				"name": "DO_datetime",
+				"type": "datetime",
+				"precision": 23,
+				"scale": 3
+			},
+			{
+				"name": "PU_date",
+				"type": "date"
+			},
+			{
+				"name": "PU_year",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "PU_quarter",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "PU_month",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "PU_week_of_year",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "PU_day_of_month",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "PU_day_of_week",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "PU_is_weekend",
+				"type": "bit"
+			},
+			{
+				"name": "PU_hour",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "PU_is_holiday",
+				"type": "bit"
+			},
+			{
+				"name": "PU_location_id",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "PU_borough",
+				"type": "nvarchar"
+			},
+			{
+				"name": "PU_zone",
+				"type": "nvarchar"
+			},
+			{
+				"name": "PU_service_zone",
+				"type": "nvarchar"
+			},
+			{
+				"name": "DO_location_id",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "DO_borough",
+				"type": "nvarchar"
+			},
+			{
+				"name": "DO_zone",
+				"type": "nvarchar"
+			},
+			{
+				"name": "DO_service_zone",
+				"type": "nvarchar"
+			},
+			{
+				"name": "is_in_same_borough",
+				"type": "bit"
+			},
+			{
+				"name": "passenger_count",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "fare_amount",
+				"type": "decimal",
+				"precision": 10,
+				"scale": 2
+			},
+			{
+				"name": "extra",
+				"type": "decimal",
+				"precision": 5,
+				"scale": 2
+			},
+			{
+				"name": "mta_tax",
+				"type": "decimal",
+				"precision": 5,
+				"scale": 2
+			},
+			{
+				"name": "tolls_amount",
+				"type": "decimal",
+				"precision": 10,
+				"scale": 2
+			},
+			{
+				"name": "improvement_surcharge",
+				"type": "decimal",
+				"precision": 5,
+				"scale": 2
+			},
+			{
+				"name": "congestion_surcharge",
+				"type": "decimal",
+				"precision": 5,
+				"scale": 2
+			},
+			{
+				"name": "tip_amount",
+				"type": "decimal",
+				"precision": 10,
+				"scale": 2
+			},
+			{
+				"name": "total_amount",
+				"type": "decimal",
+				"precision": 10,
+				"scale": 2
+			},
+			{
+				"name": "tip_percentage",
+				"type": "decimal",
+				"precision": 5,
+				"scale": 2
+			},
+			{
+				"name": "trip_distance_km",
+				"type": "decimal",
+				"precision": 10,
+				"scale": 2
+			},
+			{
+				"name": "trip_duration_seconds",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "TMAX_Celsius",
+				"type": "decimal",
+				"precision": 5,
+				"scale": 2
+			},
+			{
+				"name": "TMIN_Celsius",
+				"type": "decimal",
+				"precision": 5,
+				"scale": 2
+			},
+			{
+				"name": "TAVG_Celsius",
+				"type": "decimal",
+				"precision": 5,
+				"scale": 2
+			},
+			{
+				"name": "temp_range",
+				"type": "decimal",
+				"precision": 5,
+				"scale": 2
+			},
+			{
+				"name": "PRCP_cm",
+				"type": "decimal",
+				"precision": 5,
+				"scale": 2
+			},
+			{
+				"name": "SNOW_cm",
+				"type": "decimal",
+				"precision": 5,
+				"scale": 2
+			},
+			{
+				"name": "SNWD_cm",
+				"type": "decimal",
+				"precision": 5,
+				"scale": 2
+			}
+		],
+		"typeProperties": {
+			"schema": "uber_reporting",
+			"table": "transformed_data"
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

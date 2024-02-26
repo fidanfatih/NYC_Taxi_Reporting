@@ -1,0 +1,89 @@
+{
+	"name": "df_csv_to_paquet",
+	"properties": {
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"dataset": {
+						"referenceName": "ds_processed_by_databricks_csv",
+						"type": "DatasetReference"
+					},
+					"name": "CSVSource"
+				}
+			],
+			"sinks": [
+				{
+					"dataset": {
+						"referenceName": "ds_processed_by_databricks_parquet",
+						"type": "DatasetReference"
+					},
+					"name": "PARQUETSink"
+				}
+			],
+			"transformations": [],
+			"scriptLines": [
+				"source(output(",
+				"          vendor as string,",
+				"          ratecode_description as string,",
+				"          payment_type_description as string,",
+				"          trip_type_description as string,",
+				"          store_and_fwd_flag as string,",
+				"          PU_datetime as timestamp,",
+				"          DO_datetime as timestamp,",
+				"          PU_date as date,",
+				"          PU_year as short,",
+				"          PU_quarter as short,",
+				"          PU_month as short,",
+				"          PU_week_of_year as short,",
+				"          PU_day_of_month as short,",
+				"          PU_day_of_week as short,",
+				"          PU_is_weekend as short,",
+				"          PU_hour as short,",
+				"          PU_is_holiday as short,",
+				"          PU_location_id as integer,",
+				"          PU_borough as string,",
+				"          PU_zone as string,",
+				"          PU_service_zone as string,",
+				"          DO_location_id as integer,",
+				"          DO_borough as string,",
+				"          DO_zone as string,",
+				"          DO_service_zone as string,",
+				"          is_in_same_borough as short,",
+				"          passenger_count as double,",
+				"          fare_amount as double,",
+				"          extra as double,",
+				"          mta_tax as double,",
+				"          tolls_amount as double,",
+				"          improvement_surcharge as double,",
+				"          congestion_surcharge as double,",
+				"          tip_amount as double,",
+				"          total_amount as double,",
+				"          tip_percentage as double,",
+				"          trip_distance_km as double,",
+				"          trip_duration_seconds as long,",
+				"          TMAX_Celsius as double,",
+				"          TMIN_Celsius as double,",
+				"          TAVG_Celsius as double,",
+				"          temp_range as double,",
+				"          PRCP_cm as double,",
+				"          SNOW_cm as double,",
+				"          SNWD_cm as double",
+				"     ),",
+				"     allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     ignoreNoFilesFound: false) ~> CSVSource",
+				"CSVSource sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     format: 'parquet',",
+				"     partitionFileNames:['transformed_data_with_databricks.parquet'],",
+				"     umask: 0022,",
+				"     preCommands: [],",
+				"     postCommands: [],",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true,",
+				"     partitionBy('hash', 1)) ~> PARQUETSink"
+			]
+		}
+	}
+}

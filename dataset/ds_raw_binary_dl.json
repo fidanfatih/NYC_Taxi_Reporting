@@ -1,0 +1,37 @@
+{
+	"name": "ds_raw_binary_dl",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "ls_adls_uberreportingdl",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"fileName": {
+				"type": "string"
+			},
+			"folderName": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "Raw"
+		},
+		"annotations": [],
+		"type": "Binary",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobFSLocation",
+				"fileName": {
+					"value": "@dataset().fileName",
+					"type": "Expression"
+				},
+				"folderPath": {
+					"value": "@dataset().folderName",
+					"type": "Expression"
+				},
+				"fileSystem": "raw"
+			}
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

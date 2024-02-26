@@ -1,0 +1,27 @@
+{
+	"name": "ds_processed_by_databricks_csv",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "ls_adls_uberreportingdl",
+			"type": "LinkedServiceReference"
+		},
+		"folder": {
+			"name": "Processed"
+		},
+		"annotations": [],
+		"type": "DelimitedText",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobFSLocation",
+				"fileName": "transformed_data_with_databricks.csv",
+				"fileSystem": "processed"
+			},
+			"columnDelimiter": ",",
+			"escapeChar": "\\",
+			"firstRowAsHeader": true,
+			"quoteChar": "\""
+		},
+		"schema": []
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

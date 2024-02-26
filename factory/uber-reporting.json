@@ -1,0 +1,9 @@
+{
+	"name": "uber-reporting",
+	"location": "westeurope",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "ba2dd3f8-49d6-4b8b-8cad-e498418dfec7",
+		"tenantId": "d2dc1371-b84f-4a81-b4ae-91a57528a9dc"
+	}
+}

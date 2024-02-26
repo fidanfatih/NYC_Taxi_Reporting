@@ -1,0 +1,23 @@
+{
+	"name": "ds_resource_file_parameters",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "ls_adls_uberreportingdl",
+			"type": "LinkedServiceReference"
+		},
+		"folder": {
+			"name": "Config"
+		},
+		"annotations": [],
+		"type": "Json",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobFSLocation",
+				"fileName": "resource_file_parameters.json",
+				"fileSystem": "config"
+			}
+		},
+		"schema": {}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}
