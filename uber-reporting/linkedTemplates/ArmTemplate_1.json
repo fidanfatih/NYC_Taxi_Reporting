@@ -1,0 +1,793 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"type": "string",
+			"metadata": "Data Factory name",
+			"defaultValue": "uber-reporting"
+		}
+	},
+	"variables": {
+		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+	},
+	"resources": [
+		{
+			"name": "[concat(parameters('factoryName'), '/pl_process_via_dataflow')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Data Transformation",
+						"type": "ExecuteDataFlow",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataflow": {
+								"referenceName": "df_transform_January",
+								"type": "DataFlowReference",
+								"parameters": {},
+								"datasetParameters": {
+									"TripDataSource": {},
+									"WeatherDataSource": {},
+									"TaxiZoneDataSource": {},
+									"NycTaxiDataSink": {}
+								}
+							},
+							"staging": {},
+							"compute": {
+								"coreCount": 8,
+								"computeType": "General"
+							},
+							"traceLevel": "Fine"
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"annotations": [],
+				"lastPublishTime": "2024-02-19T10:18:05Z"
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/pl_sqlize_transformed_data')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Load Data to SQL Database",
+						"type": "Copy",
+						"dependsOn": [
+							{
+								"activity": "Cvs to Parquet Conversion",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "ParquetSource",
+								"storeSettings": {
+									"type": "AzureBlobFSReadSettings",
+									"recursive": true,
+									"enablePartitionDiscovery": false
+								},
+								"formatSettings": {
+									"type": "ParquetReadSettings"
+								}
+							},
+							"sink": {
+								"type": "AzureSqlSink",
+								"writeBehavior": "insert",
+								"sqlWriterUseTableLock": false
+							},
+							"enableStaging": false,
+							"translator": {
+								"type": "TabularTranslator",
+								"mappings": [
+									{
+										"source": {
+											"name": "vendor",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "vendor",
+											"type": "String",
+											"physicalType": "nvarchar"
+										}
+									},
+									{
+										"source": {
+											"name": "ratecode_description",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "ratecode_description",
+											"type": "String",
+											"physicalType": "nvarchar"
+										}
+									},
+									{
+										"source": {
+											"name": "payment_type_description",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "payment_type_description",
+											"type": "String",
+											"physicalType": "nvarchar"
+										}
+									},
+									{
+										"source": {
+											"name": "trip_type_description",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "trip_type_description",
+											"type": "String",
+											"physicalType": "nvarchar"
+										}
+									},
+									{
+										"source": {
+											"name": "store_and_fwd_flag",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "store_and_fwd_flag",
+											"type": "String",
+											"physicalType": "nvarchar"
+										}
+									},
+									{
+										"source": {
+											"name": "PU_datetime",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "PU_datetime",
+											"type": "DateTime",
+											"physicalType": "datetime"
+										}
+									},
+									{
+										"source": {
+											"name": "DO_datetime",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "DO_datetime",
+											"type": "DateTime",
+											"physicalType": "datetime"
+										}
+									},
+									{
+										"source": {
+											"name": "PU_date",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "PU_date",
+											"type": "DateTime",
+											"physicalType": "date"
+										}
+									},
+									{
+										"source": {
+											"name": "PU_year",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "PU_year",
+											"type": "Int32",
+											"physicalType": "int"
+										}
+									},
+									{
+										"source": {
+											"name": "PU_quarter",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "PU_quarter",
+											"type": "Int32",
+											"physicalType": "int"
+										}
+									},
+									{
+										"source": {
+											"name": "PU_month",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "PU_month",
+											"type": "Int32",
+											"physicalType": "int"
+										}
+									},
+									{
+										"source": {
+											"name": "PU_week_of_year",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "PU_week_of_year",
+											"type": "Int32",
+											"physicalType": "int"
+										}
+									},
+									{
+										"source": {
+											"name": "PU_day_of_month",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "PU_day_of_month",
+											"type": "Int32",
+											"physicalType": "int"
+										}
+									},
+									{
+										"source": {
+											"name": "PU_day_of_week",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "PU_day_of_week",
+											"type": "Int32",
+											"physicalType": "int"
+										}
+									},
+									{
+										"source": {
+											"name": "PU_is_weekend",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "PU_is_weekend",
+											"type": "Boolean",
+											"physicalType": "bit"
+										}
+									},
+									{
+										"source": {
+											"name": "PU_hour",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "PU_hour",
+											"type": "Int32",
+											"physicalType": "int"
+										}
+									},
+									{
+										"source": {
+											"name": "PU_is_holiday",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "PU_is_holiday",
+											"type": "Boolean",
+											"physicalType": "bit"
+										}
+									},
+									{
+										"source": {
+											"name": "PU_location_id",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "PU_location_id",
+											"type": "Int32",
+											"physicalType": "int"
+										}
+									},
+									{
+										"source": {
+											"name": "PU_borough",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "PU_borough",
+											"type": "String",
+											"physicalType": "nvarchar"
+										}
+									},
+									{
+										"source": {
+											"name": "PU_zone",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "PU_zone",
+											"type": "String",
+											"physicalType": "nvarchar"
+										}
+									},
+									{
+										"source": {
+											"name": "PU_service_zone",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "PU_service_zone",
+											"type": "String",
+											"physicalType": "nvarchar"
+										}
+									},
+									{
+										"source": {
+											"name": "DO_location_id",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "DO_location_id",
+											"type": "Int32",
+											"physicalType": "int"
+										}
+									},
+									{
+										"source": {
+											"name": "DO_borough",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "DO_borough",
+											"type": "String",
+											"physicalType": "nvarchar"
+										}
+									},
+									{
+										"source": {
+											"name": "DO_zone",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "DO_zone",
+											"type": "String",
+											"physicalType": "nvarchar"
+										}
+									},
+									{
+										"source": {
+											"name": "DO_service_zone",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "DO_service_zone",
+											"type": "String",
+											"physicalType": "nvarchar"
+										}
+									},
+									{
+										"source": {
+											"name": "is_in_same_borough",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "is_in_same_borough",
+											"type": "Int32",
+											"physicalType": "int"
+										}
+									},
+									{
+										"source": {
+											"name": "passenger_count",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "passenger_count",
+											"type": "Int32",
+											"physicalType": "int"
+										}
+									},
+									{
+										"source": {
+											"name": "fare_amount",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "fare_amount",
+											"type": "Double",
+											"physicalType": "float"
+										}
+									},
+									{
+										"source": {
+											"name": "extra",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "extra",
+											"type": "Double",
+											"physicalType": "float"
+										}
+									},
+									{
+										"source": {
+											"name": "mta_tax",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "mta_tax",
+											"type": "Double",
+											"physicalType": "float"
+										}
+									},
+									{
+										"source": {
+											"name": "tolls_amount",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "tolls_amount",
+											"type": "Double",
+											"physicalType": "float"
+										}
+									},
+									{
+										"source": {
+											"name": "improvement_surcharge",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "improvement_surcharge",
+											"type": "Double",
+											"physicalType": "float"
+										}
+									},
+									{
+										"source": {
+											"name": "congestion_surcharge",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "congestion_surcharge",
+											"type": "Double",
+											"physicalType": "float"
+										}
+									},
+									{
+										"source": {
+											"name": "tip_amount",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "tip_amount",
+											"type": "Double",
+											"physicalType": "float"
+										}
+									},
+									{
+										"source": {
+											"name": "total_amount",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "total_amount",
+											"type": "Double",
+											"physicalType": "float"
+										}
+									},
+									{
+										"source": {
+											"name": "tip_percentage",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "tip_percentage",
+											"type": "Double",
+											"physicalType": "float"
+										}
+									},
+									{
+										"source": {
+											"name": "trip_distance_km",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "trip_distance_km",
+											"type": "Double",
+											"physicalType": "float"
+										}
+									},
+									{
+										"source": {
+											"name": "trip_duration_seconds",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "trip_duration_seconds",
+											"type": "Int32",
+											"physicalType": "int"
+										}
+									},
+									{
+										"source": {
+											"name": "TMAX_Celsius",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "TMAX_Celsius",
+											"type": "Double",
+											"physicalType": "float"
+										}
+									},
+									{
+										"source": {
+											"name": "TMIN_Celsius",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "TMIN_Celsius",
+											"type": "Double",
+											"physicalType": "float"
+										}
+									},
+									{
+										"source": {
+											"name": "TAVG_Celsius",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "TAVG_Celsius",
+											"type": "Double",
+											"physicalType": "float"
+										}
+									},
+									{
+										"source": {
+											"name": "temp_range",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "temp_range",
+											"type": "Double",
+											"physicalType": "float"
+										}
+									},
+									{
+										"source": {
+											"name": "PRCP_cm",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "PRCP_cm",
+											"type": "Double",
+											"physicalType": "float"
+										}
+									},
+									{
+										"source": {
+											"name": "SNOW_cm",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "SNOW_cm",
+											"type": "Double",
+											"physicalType": "float"
+										}
+									},
+									{
+										"source": {
+											"name": "SNWD_cm",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "SNWD_cm",
+											"type": "Double",
+											"physicalType": "float"
+										}
+									}
+								],
+								"typeConversion": true,
+								"typeConversionSettings": {
+									"allowDataTruncation": true,
+									"treatBooleanAsNumber": false
+								}
+							}
+						},
+						"inputs": [
+							{
+								"referenceName": "ds_processed_by_databricks_parquet",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						],
+						"outputs": [
+							{
+								"referenceName": "ds_sql_processed_data",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						]
+					},
+					{
+						"name": "Cvs to Parquet Conversion",
+						"type": "ExecuteDataFlow",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataflow": {
+								"referenceName": "df_csv_to_paquet",
+								"type": "DataFlowReference",
+								"parameters": {},
+								"datasetParameters": {
+									"CSVSource": {},
+									"PARQUETSink": {}
+								}
+							},
+							"staging": {},
+							"compute": {
+								"coreCount": 8,
+								"computeType": "General"
+							},
+							"traceLevel": "Fine"
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"annotations": [],
+				"lastPublishTime": "2024-02-21T16:00:57Z"
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/pl_execute')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "TransformByDF",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "Extract",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "pl_process_via_databricks",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {}
+						}
+					},
+					{
+						"name": "Load",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "TransformByDF",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "pl_sqlize_transformed_data",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {}
+						}
+					},
+					{
+						"name": "Extract",
+						"type": "ExecutePipeline",
+						"dependsOn": [],
+						"policy": {
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "pl_ingest_data",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {}
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"annotations": [],
+				"lastPublishTime": "2024-02-21T16:12:27Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/pl_sqlize_transformed_data')]"
+			]
+		}
+	]
+}

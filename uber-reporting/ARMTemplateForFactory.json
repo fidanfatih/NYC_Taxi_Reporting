@@ -1,0 +1,2072 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"type": "string",
+			"metadata": "Data Factory name",
+			"defaultValue": "uber-reporting"
+		},
+		"ls_adls_uberreportingdl_accountKey": {
+			"type": "secureString",
+			"metadata": "Secure string for 'accountKey' of 'ls_adls_uberreportingdl'"
+		},
+		"ls_db_nyc_taxi_cluster_accessToken": {
+			"type": "secureString",
+			"metadata": "Secure string for 'accessToken' of 'ls_db_nyc_taxi_cluster'"
+		},
+		"ls_sql_processed_data_connectionString": {
+			"type": "secureString",
+			"metadata": "Secure string for 'connectionString' of 'ls_sql_processed_data'"
+		},
+		"ls_adls_uberreportingdl_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "https://uberreportingdl.dfs.core.windows.net/"
+		},
+		"ls_db_nyc_taxi_cluster_properties_typeProperties_existingClusterId": {
+			"type": "string",
+			"defaultValue": "1202-142736-gmxz3o3a"
+		},
+		"ls_http_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "@{linkedService().sourceBaseURL}"
+		},
+		"ls_http_ncei_gov_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "@{linkedService().sourceBaseURL}"
+		},
+		"ls_http_nyc_gov_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "@{linkedService().sourceBaseURL}"
+		}
+	},
+	"variables": {
+		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+	},
+	"resources": [
+		{
+			"name": "[concat(parameters('factoryName'), '/pl_execute')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "TransformByDF",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "Extract",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "pl_process_via_databricks",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {}
+						}
+					},
+					{
+						"name": "Load",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "TransformByDF",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "pl_sqlize_transformed_data",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {}
+						}
+					},
+					{
+						"name": "Extract",
+						"type": "ExecutePipeline",
+						"dependsOn": [],
+						"policy": {
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "pl_ingest_data",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {}
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"annotations": [],
+				"lastPublishTime": "2024-02-21T16:12:27Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/pl_process_via_databricks')]",
+				"[concat(variables('factoryId'), '/pipelines/pl_sqlize_transformed_data')]",
+				"[concat(variables('factoryId'), '/pipelines/pl_ingest_data')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/pl_ingest_data')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Lookup Resource File Parameters",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "JsonSource",
+								"storeSettings": {
+									"type": "AzureBlobFSReadSettings",
+									"recursive": true,
+									"enablePartitionDiscovery": false
+								},
+								"formatSettings": {
+									"type": "JsonReadSettings"
+								}
+							},
+							"dataset": {
+								"referenceName": "ds_resource_file_parameters",
+								"type": "DatasetReference",
+								"parameters": {}
+							},
+							"firstRowOnly": false
+						}
+					},
+					{
+						"name": "Execute Copy For Every Records",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "Lookup Resource File Parameters",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('Lookup Resource File Parameters').output.value",
+								"type": "Expression"
+							},
+							"isSequential": true,
+							"activities": [
+								{
+									"name": "Copy Resource Files",
+									"type": "Copy",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "BinarySource",
+											"storeSettings": {
+												"type": "HttpReadSettings",
+												"requestMethod": "GET"
+											},
+											"formatSettings": {
+												"type": "BinaryReadSettings"
+											}
+										},
+										"sink": {
+											"type": "BinarySink",
+											"storeSettings": {
+												"type": "AzureBlobFSWriteSettings"
+											}
+										},
+										"enableStaging": false
+									},
+									"inputs": [
+										{
+											"referenceName": "ds_raw_binary_http",
+											"type": "DatasetReference",
+											"parameters": {
+												"baseURL": {
+													"value": "@item().sourceBaseURL",
+													"type": "Expression"
+												},
+												"relativeURL": {
+													"value": "@item().sourceRelativeURL",
+													"type": "Expression"
+												}
+											}
+										}
+									],
+									"outputs": [
+										{
+											"referenceName": "ds_raw_binary_dl",
+											"type": "DatasetReference",
+											"parameters": {
+												"fileName": {
+													"value": "@item().sinkFileName",
+													"type": "Expression"
+												},
+												"folderName": {
+													"value": "@item().sinkFolderName",
+													"type": "Expression"
+												}
+											}
+										}
+									]
+								}
+							]
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"annotations": [],
+				"lastPublishTime": "2024-02-21T16:00:56Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/ds_resource_file_parameters')]",
+				"[concat(variables('factoryId'), '/datasets/ds_raw_binary_http')]",
+				"[concat(variables('factoryId'), '/datasets/ds_raw_binary_dl')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/pl_process_via_databricks')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Execute NYC Taxi Transformation",
+						"type": "DatabricksNotebook",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"notebookPath": "/Users/fatih.fidan@accenture.com/Nyc_Taxi/transform_nyc_taxi"
+						},
+						"linkedServiceName": {
+							"referenceName": "ls_db_nyc_taxi_cluster",
+							"type": "LinkedServiceReference"
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"annotations": [],
+				"lastPublishTime": "2024-02-21T16:07:09Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_db_nyc_taxi_cluster')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/pl_process_via_dataflow')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Data Transformation",
+						"type": "ExecuteDataFlow",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataflow": {
+								"referenceName": "df_transform_January",
+								"type": "DataFlowReference",
+								"parameters": {},
+								"datasetParameters": {
+									"TripDataSource": {},
+									"WeatherDataSource": {},
+									"TaxiZoneDataSource": {},
+									"NycTaxiDataSink": {}
+								}
+							},
+							"staging": {},
+							"compute": {
+								"coreCount": 8,
+								"computeType": "General"
+							},
+							"traceLevel": "Fine"
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"annotations": [],
+				"lastPublishTime": "2024-02-19T10:18:05Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/dataflows/df_transform_January')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/pl_sqlize_transformed_data')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Load Data to SQL Database",
+						"type": "Copy",
+						"dependsOn": [
+							{
+								"activity": "Cvs to Parquet Conversion",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "ParquetSource",
+								"storeSettings": {
+									"type": "AzureBlobFSReadSettings",
+									"recursive": true,
+									"enablePartitionDiscovery": false
+								},
+								"formatSettings": {
+									"type": "ParquetReadSettings"
+								}
+							},
+							"sink": {
+								"type": "AzureSqlSink",
+								"writeBehavior": "insert",
+								"sqlWriterUseTableLock": false
+							},
+							"enableStaging": false,
+							"translator": {
+								"type": "TabularTranslator",
+								"mappings": [
+									{
+										"source": {
+											"name": "vendor",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "vendor",
+											"type": "String",
+											"physicalType": "nvarchar"
+										}
+									},
+									{
+										"source": {
+											"name": "ratecode_description",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "ratecode_description",
+											"type": "String",
+											"physicalType": "nvarchar"
+										}
+									},
+									{
+										"source": {
+											"name": "payment_type_description",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "payment_type_description",
+											"type": "String",
+											"physicalType": "nvarchar"
+										}
+									},
+									{
+										"source": {
+											"name": "trip_type_description",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "trip_type_description",
+											"type": "String",
+											"physicalType": "nvarchar"
+										}
+									},
+									{
+										"source": {
+											"name": "store_and_fwd_flag",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "store_and_fwd_flag",
+											"type": "String",
+											"physicalType": "nvarchar"
+										}
+									},
+									{
+										"source": {
+											"name": "PU_datetime",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "PU_datetime",
+											"type": "DateTime",
+											"physicalType": "datetime"
+										}
+									},
+									{
+										"source": {
+											"name": "DO_datetime",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "DO_datetime",
+											"type": "DateTime",
+											"physicalType": "datetime"
+										}
+									},
+									{
+										"source": {
+											"name": "PU_date",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "PU_date",
+											"type": "DateTime",
+											"physicalType": "date"
+										}
+									},
+									{
+										"source": {
+											"name": "PU_year",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "PU_year",
+											"type": "Int32",
+											"physicalType": "int"
+										}
+									},
+									{
+										"source": {
+											"name": "PU_quarter",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "PU_quarter",
+											"type": "Int32",
+											"physicalType": "int"
+										}
+									},
+									{
+										"source": {
+											"name": "PU_month",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "PU_month",
+											"type": "Int32",
+											"physicalType": "int"
+										}
+									},
+									{
+										"source": {
+											"name": "PU_week_of_year",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "PU_week_of_year",
+											"type": "Int32",
+											"physicalType": "int"
+										}
+									},
+									{
+										"source": {
+											"name": "PU_day_of_month",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "PU_day_of_month",
+											"type": "Int32",
+											"physicalType": "int"
+										}
+									},
+									{
+										"source": {
+											"name": "PU_day_of_week",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "PU_day_of_week",
+											"type": "Int32",
+											"physicalType": "int"
+										}
+									},
+									{
+										"source": {
+											"name": "PU_is_weekend",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "PU_is_weekend",
+											"type": "Boolean",
+											"physicalType": "bit"
+										}
+									},
+									{
+										"source": {
+											"name": "PU_hour",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "PU_hour",
+											"type": "Int32",
+											"physicalType": "int"
+										}
+									},
+									{
+										"source": {
+											"name": "PU_is_holiday",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "PU_is_holiday",
+											"type": "Boolean",
+											"physicalType": "bit"
+										}
+									},
+									{
+										"source": {
+											"name": "PU_location_id",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "PU_location_id",
+											"type": "Int32",
+											"physicalType": "int"
+										}
+									},
+									{
+										"source": {
+											"name": "PU_borough",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "PU_borough",
+											"type": "String",
+											"physicalType": "nvarchar"
+										}
+									},
+									{
+										"source": {
+											"name": "PU_zone",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "PU_zone",
+											"type": "String",
+											"physicalType": "nvarchar"
+										}
+									},
+									{
+										"source": {
+											"name": "PU_service_zone",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "PU_service_zone",
+											"type": "String",
+											"physicalType": "nvarchar"
+										}
+									},
+									{
+										"source": {
+											"name": "DO_location_id",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "DO_location_id",
+											"type": "Int32",
+											"physicalType": "int"
+										}
+									},
+									{
+										"source": {
+											"name": "DO_borough",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "DO_borough",
+											"type": "String",
+											"physicalType": "nvarchar"
+										}
+									},
+									{
+										"source": {
+											"name": "DO_zone",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "DO_zone",
+											"type": "String",
+											"physicalType": "nvarchar"
+										}
+									},
+									{
+										"source": {
+											"name": "DO_service_zone",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "DO_service_zone",
+											"type": "String",
+											"physicalType": "nvarchar"
+										}
+									},
+									{
+										"source": {
+											"name": "is_in_same_borough",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "is_in_same_borough",
+											"type": "Int32",
+											"physicalType": "int"
+										}
+									},
+									{
+										"source": {
+											"name": "passenger_count",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "passenger_count",
+											"type": "Int32",
+											"physicalType": "int"
+										}
+									},
+									{
+										"source": {
+											"name": "fare_amount",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "fare_amount",
+											"type": "Double",
+											"physicalType": "float"
+										}
+									},
+									{
+										"source": {
+											"name": "extra",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "extra",
+											"type": "Double",
+											"physicalType": "float"
+										}
+									},
+									{
+										"source": {
+											"name": "mta_tax",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "mta_tax",
+											"type": "Double",
+											"physicalType": "float"
+										}
+									},
+									{
+										"source": {
+											"name": "tolls_amount",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "tolls_amount",
+											"type": "Double",
+											"physicalType": "float"
+										}
+									},
+									{
+										"source": {
+											"name": "improvement_surcharge",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "improvement_surcharge",
+											"type": "Double",
+											"physicalType": "float"
+										}
+									},
+									{
+										"source": {
+											"name": "congestion_surcharge",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "congestion_surcharge",
+											"type": "Double",
+											"physicalType": "float"
+										}
+									},
+									{
+										"source": {
+											"name": "tip_amount",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "tip_amount",
+											"type": "Double",
+											"physicalType": "float"
+										}
+									},
+									{
+										"source": {
+											"name": "total_amount",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "total_amount",
+											"type": "Double",
+											"physicalType": "float"
+										}
+									},
+									{
+										"source": {
+											"name": "tip_percentage",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "tip_percentage",
+											"type": "Double",
+											"physicalType": "float"
+										}
+									},
+									{
+										"source": {
+											"name": "trip_distance_km",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "trip_distance_km",
+											"type": "Double",
+											"physicalType": "float"
+										}
+									},
+									{
+										"source": {
+											"name": "trip_duration_seconds",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "trip_duration_seconds",
+											"type": "Int32",
+											"physicalType": "int"
+										}
+									},
+									{
+										"source": {
+											"name": "TMAX_Celsius",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "TMAX_Celsius",
+											"type": "Double",
+											"physicalType": "float"
+										}
+									},
+									{
+										"source": {
+											"name": "TMIN_Celsius",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "TMIN_Celsius",
+											"type": "Double",
+											"physicalType": "float"
+										}
+									},
+									{
+										"source": {
+											"name": "TAVG_Celsius",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "TAVG_Celsius",
+											"type": "Double",
+											"physicalType": "float"
+										}
+									},
+									{
+										"source": {
+											"name": "temp_range",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "temp_range",
+											"type": "Double",
+											"physicalType": "float"
+										}
+									},
+									{
+										"source": {
+											"name": "PRCP_cm",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "PRCP_cm",
+											"type": "Double",
+											"physicalType": "float"
+										}
+									},
+									{
+										"source": {
+											"name": "SNOW_cm",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "SNOW_cm",
+											"type": "Double",
+											"physicalType": "float"
+										}
+									},
+									{
+										"source": {
+											"name": "SNWD_cm",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "SNWD_cm",
+											"type": "Double",
+											"physicalType": "float"
+										}
+									}
+								],
+								"typeConversion": true,
+								"typeConversionSettings": {
+									"allowDataTruncation": true,
+									"treatBooleanAsNumber": false
+								}
+							}
+						},
+						"inputs": [
+							{
+								"referenceName": "ds_processed_by_databricks_parquet",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						],
+						"outputs": [
+							{
+								"referenceName": "ds_sql_processed_data",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						]
+					},
+					{
+						"name": "Cvs to Parquet Conversion",
+						"type": "ExecuteDataFlow",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataflow": {
+								"referenceName": "df_csv_to_paquet",
+								"type": "DataFlowReference",
+								"parameters": {},
+								"datasetParameters": {
+									"CSVSource": {},
+									"PARQUETSink": {}
+								}
+							},
+							"staging": {},
+							"compute": {
+								"coreCount": 8,
+								"computeType": "General"
+							},
+							"traceLevel": "Fine"
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"annotations": [],
+				"lastPublishTime": "2024-02-21T16:00:57Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/ds_processed_by_databricks_parquet')]",
+				"[concat(variables('factoryId'), '/datasets/ds_sql_processed_data')]",
+				"[concat(variables('factoryId'), '/dataflows/df_csv_to_paquet')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_processed_by_databricks_csv')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_adls_uberreportingdl",
+					"type": "LinkedServiceReference"
+				},
+				"folder": {
+					"name": "Processed"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": "transformed_data_with_databricks.csv",
+						"fileSystem": "processed"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_adls_uberreportingdl')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_processed_by_databricks_parquet')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_adls_uberreportingdl",
+					"type": "LinkedServiceReference"
+				},
+				"folder": {
+					"name": "Processed"
+				},
+				"annotations": [],
+				"type": "Parquet",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": "transformed_data_with_databricks.parquet",
+						"fileSystem": "processed"
+					},
+					"compressionCodec": "snappy"
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_adls_uberreportingdl')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_processed_by_dataflow_csv')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_adls_uberreportingdl",
+					"type": "LinkedServiceReference"
+				},
+				"folder": {
+					"name": "Processed"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileSystem": "processed"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_adls_uberreportingdl')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_raw_binary_dl')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_adls_uberreportingdl",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"fileName": {
+						"type": "string"
+					},
+					"folderName": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "Raw"
+				},
+				"annotations": [],
+				"type": "Binary",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": {
+							"value": "@dataset().fileName",
+							"type": "Expression"
+						},
+						"folderPath": {
+							"value": "@dataset().folderName",
+							"type": "Expression"
+						},
+						"fileSystem": "raw"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_adls_uberreportingdl')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_raw_binary_http')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_http",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"sourceBaseURL": {
+							"value": "@dataset().baseURL",
+							"type": "Expression"
+						}
+					}
+				},
+				"parameters": {
+					"baseURL": {
+						"type": "string"
+					},
+					"relativeURL": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "Raw"
+				},
+				"annotations": [],
+				"type": "Binary",
+				"typeProperties": {
+					"location": {
+						"type": "HttpServerLocation",
+						"relativeUrl": {
+							"value": "@dataset().relativeURL",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_http')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_raw_taxi_zone_csv')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_adls_uberreportingdl",
+					"type": "LinkedServiceReference"
+				},
+				"folder": {
+					"name": "Raw"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": "taxi+_zone_lookup.csv",
+						"folderPath": "lookup",
+						"fileSystem": "raw"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_adls_uberreportingdl')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_raw_tripdata_january_parquet')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_adls_uberreportingdl",
+					"type": "LinkedServiceReference"
+				},
+				"folder": {
+					"name": "Raw"
+				},
+				"annotations": [],
+				"type": "Parquet",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": "green_tripdata_2023-01.parquet",
+						"folderPath": "trip-data",
+						"fileSystem": "raw"
+					},
+					"compressionCodec": "snappy"
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_adls_uberreportingdl')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_raw_weather_csv')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_adls_uberreportingdl",
+					"type": "LinkedServiceReference"
+				},
+				"folder": {
+					"name": "Raw"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": "data.csv",
+						"folderPath": "weather",
+						"fileSystem": "raw"
+					},
+					"columnDelimiter": ",",
+					"rowDelimiter": "\n",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_adls_uberreportingdl')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_resource_file_parameters')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_adls_uberreportingdl",
+					"type": "LinkedServiceReference"
+				},
+				"folder": {
+					"name": "Config"
+				},
+				"annotations": [],
+				"type": "Json",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": "resource_file_parameters.json",
+						"fileSystem": "config"
+					}
+				},
+				"schema": {}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_adls_uberreportingdl')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_sql_processed_data')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_sql_processed_data",
+					"type": "LinkedServiceReference"
+				},
+				"folder": {
+					"name": "Sql"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "vendor",
+						"type": "nvarchar"
+					},
+					{
+						"name": "ratecode_description",
+						"type": "nvarchar"
+					},
+					{
+						"name": "payment_type_description",
+						"type": "nvarchar"
+					},
+					{
+						"name": "trip_type_description",
+						"type": "nvarchar"
+					},
+					{
+						"name": "store_and_fwd_flag",
+						"type": "nvarchar"
+					},
+					{
+						"name": "PU_datetime",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					},
+					{
+						"name": "DO_datetime",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					},
+					{
+						"name": "PU_date",
+						"type": "date"
+					},
+					{
+						"name": "PU_year",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "PU_quarter",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "PU_month",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "PU_week_of_year",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "PU_day_of_month",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "PU_day_of_week",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "PU_is_weekend",
+						"type": "bit"
+					},
+					{
+						"name": "PU_hour",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "PU_is_holiday",
+						"type": "bit"
+					},
+					{
+						"name": "PU_location_id",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "PU_borough",
+						"type": "nvarchar"
+					},
+					{
+						"name": "PU_zone",
+						"type": "nvarchar"
+					},
+					{
+						"name": "PU_service_zone",
+						"type": "nvarchar"
+					},
+					{
+						"name": "DO_location_id",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "DO_borough",
+						"type": "nvarchar"
+					},
+					{
+						"name": "DO_zone",
+						"type": "nvarchar"
+					},
+					{
+						"name": "DO_service_zone",
+						"type": "nvarchar"
+					},
+					{
+						"name": "is_in_same_borough",
+						"type": "bit"
+					},
+					{
+						"name": "passenger_count",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "fare_amount",
+						"type": "decimal",
+						"precision": 10,
+						"scale": 2
+					},
+					{
+						"name": "extra",
+						"type": "decimal",
+						"precision": 5,
+						"scale": 2
+					},
+					{
+						"name": "mta_tax",
+						"type": "decimal",
+						"precision": 5,
+						"scale": 2
+					},
+					{
+						"name": "tolls_amount",
+						"type": "decimal",
+						"precision": 10,
+						"scale": 2
+					},
+					{
+						"name": "improvement_surcharge",
+						"type": "decimal",
+						"precision": 5,
+						"scale": 2
+					},
+					{
+						"name": "congestion_surcharge",
+						"type": "decimal",
+						"precision": 5,
+						"scale": 2
+					},
+					{
+						"name": "tip_amount",
+						"type": "decimal",
+						"precision": 10,
+						"scale": 2
+					},
+					{
+						"name": "total_amount",
+						"type": "decimal",
+						"precision": 10,
+						"scale": 2
+					},
+					{
+						"name": "tip_percentage",
+						"type": "decimal",
+						"precision": 5,
+						"scale": 2
+					},
+					{
+						"name": "trip_distance_km",
+						"type": "decimal",
+						"precision": 10,
+						"scale": 2
+					},
+					{
+						"name": "trip_duration_seconds",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "TMAX_Celsius",
+						"type": "decimal",
+						"precision": 5,
+						"scale": 2
+					},
+					{
+						"name": "TMIN_Celsius",
+						"type": "decimal",
+						"precision": 5,
+						"scale": 2
+					},
+					{
+						"name": "TAVG_Celsius",
+						"type": "decimal",
+						"precision": 5,
+						"scale": 2
+					},
+					{
+						"name": "temp_range",
+						"type": "decimal",
+						"precision": 5,
+						"scale": 2
+					},
+					{
+						"name": "PRCP_cm",
+						"type": "decimal",
+						"precision": 5,
+						"scale": 2
+					},
+					{
+						"name": "SNOW_cm",
+						"type": "decimal",
+						"precision": 5,
+						"scale": 2
+					},
+					{
+						"name": "SNWD_cm",
+						"type": "decimal",
+						"precision": 5,
+						"scale": 2
+					}
+				],
+				"typeProperties": {
+					"schema": "uber_reporting",
+					"table": "transformed_data"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_sql_processed_data')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ls_adls_uberreportingdl')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureBlobFS",
+				"typeProperties": {
+					"url": "[parameters('ls_adls_uberreportingdl_properties_typeProperties_url')]",
+					"accountKey": {
+						"type": "SecureString",
+						"value": "[parameters('ls_adls_uberreportingdl_accountKey')]"
+					}
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ls_db_nyc_taxi_cluster')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureDatabricks",
+				"typeProperties": {
+					"domain": "https://adb-4848960757377511.11.azuredatabricks.net",
+					"accessToken": {
+						"type": "SecureString",
+						"value": "[parameters('ls_db_nyc_taxi_cluster_accessToken')]"
+					},
+					"existingClusterId": "[parameters('ls_db_nyc_taxi_cluster_properties_typeProperties_existingClusterId')]"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ls_http')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"parameters": {
+					"sourceBaseURL": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "HttpServer",
+				"typeProperties": {
+					"url": "[parameters('ls_http_properties_typeProperties_url')]",
+					"enableServerCertificateValidation": true,
+					"authenticationType": "Anonymous"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ls_http_ncei_gov')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"parameters": {
+					"sourceBaseURL": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "HttpServer",
+				"typeProperties": {
+					"url": "[parameters('ls_http_ncei_gov_properties_typeProperties_url')]",
+					"enableServerCertificateValidation": true,
+					"authenticationType": "Anonymous"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ls_http_nyc_gov')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"parameters": {
+					"sourceBaseURL": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "HttpServer",
+				"typeProperties": {
+					"url": "[parameters('ls_http_nyc_gov_properties_typeProperties_url')]",
+					"enableServerCertificateValidation": true,
+					"authenticationType": "Anonymous"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ls_sql_processed_data')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureSqlDatabase",
+				"typeProperties": {
+					"connectionString": "[parameters('ls_sql_processed_data_connectionString')]"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/df_csv_to_paquet')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "ds_processed_by_databricks_csv",
+								"type": "DatasetReference"
+							},
+							"name": "CSVSource"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "ds_processed_by_databricks_parquet",
+								"type": "DatasetReference"
+							},
+							"name": "PARQUETSink"
+						}
+					],
+					"transformations": [],
+					"scriptLines": [
+						"source(output(",
+						"          vendor as string,",
+						"          ratecode_description as string,",
+						"          payment_type_description as string,",
+						"          trip_type_description as string,",
+						"          store_and_fwd_flag as string,",
+						"          PU_datetime as timestamp,",
+						"          DO_datetime as timestamp,",
+						"          PU_date as date,",
+						"          PU_year as short,",
+						"          PU_quarter as short,",
+						"          PU_month as short,",
+						"          PU_week_of_year as short,",
+						"          PU_day_of_month as short,",
+						"          PU_day_of_week as short,",
+						"          PU_is_weekend as short,",
+						"          PU_hour as short,",
+						"          PU_is_holiday as short,",
+						"          PU_location_id as integer,",
+						"          PU_borough as string,",
+						"          PU_zone as string,",
+						"          PU_service_zone as string,",
+						"          DO_location_id as integer,",
+						"          DO_borough as string,",
+						"          DO_zone as string,",
+						"          DO_service_zone as string,",
+						"          is_in_same_borough as short,",
+						"          passenger_count as double,",
+						"          fare_amount as double,",
+						"          extra as double,",
+						"          mta_tax as double,",
+						"          tolls_amount as double,",
+						"          improvement_surcharge as double,",
+						"          congestion_surcharge as double,",
+						"          tip_amount as double,",
+						"          total_amount as double,",
+						"          tip_percentage as double,",
+						"          trip_distance_km as double,",
+						"          trip_duration_seconds as long,",
+						"          TMAX_Celsius as double,",
+						"          TMIN_Celsius as double,",
+						"          TAVG_Celsius as double,",
+						"          temp_range as double,",
+						"          PRCP_cm as double,",
+						"          SNOW_cm as double,",
+						"          SNWD_cm as double",
+						"     ),",
+						"     allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     ignoreNoFilesFound: false) ~> CSVSource",
+						"CSVSource sink(allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     format: 'parquet',",
+						"     partitionFileNames:['transformed_data_with_databricks.parquet'],",
+						"     umask: 0022,",
+						"     preCommands: [],",
+						"     postCommands: [],",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true,",
+						"     partitionBy('hash', 1)) ~> PARQUETSink"
+					]
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/ds_processed_by_databricks_csv')]",
+				"[concat(variables('factoryId'), '/datasets/ds_processed_by_databricks_parquet')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/df_transform_January')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "ds_raw_tripdata_january_parquet",
+								"type": "DatasetReference"
+							},
+							"name": "TripDataSource"
+						},
+						{
+							"dataset": {
+								"referenceName": "ds_raw_weather_csv",
+								"type": "DatasetReference"
+							},
+							"name": "WeatherDataSource"
+						},
+						{
+							"dataset": {
+								"referenceName": "ds_raw_taxi_zone_csv",
+								"type": "DatasetReference"
+							},
+							"name": "TaxiZoneDataSource"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "ds_processed_by_dataflow_csv",
+								"type": "DatasetReference"
+							},
+							"name": "NycTaxiDataSink",
+							"rejectedDataLinkedService": {
+								"referenceName": "ls_adls_uberreportingdl",
+								"type": "LinkedServiceReference"
+							}
+						}
+					],
+					"transformations": [
+						{
+							"name": "DerivedTimeColumns"
+						},
+						{
+							"name": "Filter2023"
+						},
+						{
+							"name": "LookupWeather"
+						},
+						{
+							"name": "LookupTaxiZonePU"
+						},
+						{
+							"name": "SelectOnlyRequiredFields"
+						},
+						{
+							"name": "SelectSNWD"
+						},
+						{
+							"name": "CastDate"
+						},
+						{
+							"name": "LookupTaxiZoneDO"
+						},
+						{
+							"name": "DerivedColumns"
+						},
+						{
+							"name": "FillingMissingValues"
+						},
+						{
+							"name": "RemoveRedundantColumns"
+						},
+						{
+							"name": "Cast"
+						},
+						{
+							"name": "FilterYear2023"
+						}
+					],
+					"scriptLines": [
+						"source(output(",
+						"          VendorID as integer,",
+						"          lpep_pickup_datetime as timestamp,",
+						"          lpep_dropoff_datetime as timestamp,",
+						"          store_and_fwd_flag as string,",
+						"          RatecodeID as double,",
+						"          PULocationID as integer,",
+						"          DOLocationID as integer,",
+						"          passenger_count as integer,",
+						"          trip_distance as double,",
+						"          fare_amount as double,",
+						"          extra as double,",
+						"          mta_tax as double,",
+						"          tip_amount as double,",
+						"          tolls_amount as double,",
+						"          ehail_fee as double,",
+						"          improvement_surcharge as double,",
+						"          total_amount as double,",
+						"          payment_type as integer,",
+						"          trip_type as integer,",
+						"          congestion_surcharge as double",
+						"     ),",
+						"     allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     ignoreNoFilesFound: false,",
+						"     format: 'parquet') ~> TripDataSource",
+						"source(output(",
+						"          Date as string,",
+						"          {TAVG (Degrees Fahrenheit)} as string,",
+						"          {TMAX (Degrees Fahrenheit)} as long,",
+						"          {TMIN (Degrees Fahrenheit)} as long,",
+						"          {PRCP (Inches)} as double,",
+						"          {SNOW (Inches)} as double,",
+						"          {{SNWD} as (Inches as string)",
+						"     ),",
+						"     allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     inferDriftedColumnTypes: true,",
+						"     ignoreNoFilesFound: false,",
+						"     dateFormats: ['yyyy-MM-dd'],",
+						"     preferredIntegralType: 'long',",
+						"     preferredFractionalType: 'double') ~> WeatherDataSource",
+						"source(output(",
+						"          LocationID as long,",
+						"          Borough as string,",
+						"          Zone as string,",
+						"          service_zone as string",
+						"     ),",
+						"     allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     ignoreNoFilesFound: false) ~> TaxiZoneDataSource",
+						"TripDataSource derive(date_column = toDate(lpep_pickup_datetime),",
+						"          pickup_hour = hour(lpep_pickup_datetime),",
+						"          pickup_week_of_year = weekOfYear(lpep_pickup_datetime),",
+						"          pickup_day_of_week = dayOfWeek(lpep_pickup_datetime),",
+						"          pickup_day_of_month = dayOfMonth(lpep_pickup_datetime),",
+						"          pickup_month = month(lpep_pickup_datetime),",
+						"          pickup_year = year(lpep_pickup_datetime),",
+						"          travel_time_seconds = toInteger((lpep_dropoff_datetime-lpep_pickup_datetime)/1000)) ~> DerivedTimeColumns",
+						"WeatherDataSource filter(regexSplit(Date, \"-\")[1]=='2023') ~> Filter2023",
+						"FilterYear2023, CastDate lookup(date_column == Date,",
+						"     multiple: false,",
+						"     pickup: 'any',",
+						"     broadcast: 'auto')~> LookupWeather",
+						"LookupWeather, TaxiZoneDataSource lookup(PULocationID == LocationID,",
+						"     multiple: false,",
+						"     pickup: 'any',",
+						"     broadcast: 'auto')~> LookupTaxiZonePU",
+						"LookupTaxiZonePU select(mapColumn(",
+						"          VendorID,",
+						"          pickup_datetime = lpep_pickup_datetime,",
+						"          dropoff_datetime = lpep_dropoff_datetime,",
+						"          store_and_fwd_flag,",
+						"          RatecodeID,",
+						"          PULocationID,",
+						"          DOLocationID,",
+						"          passenger_count,",
+						"          trip_distance,",
+						"          fare_amount,",
+						"          extra,",
+						"          mta_tax,",
+						"          tip_amount,",
+						"          tolls_amount,",
+						"          ehail_fee,",
+						"          improvement_surcharge,",
+						"          total_amount,",
+						"          payment_type,",
+						"          trip_type,",
+						"          congestion_surcharge,",
+						"          date_column,",
+						"          pickup_hour,",
+						"          pickup_week_of_year,",
+						"          pickup_day_of_week,",
+						"          pickup_day_of_month,",
+						"          pickup_month,",
+						"          pickup_year,",
+						"          travel_time_seconds,",
+						"          {TMAX (Degrees Fahrenheit)},",
+						"          {TMIN (Degrees Fahrenheit)},",
+						"          {PRCP (Inches)},",
+						"          {SNOW (Inches)},",
+						"          PU_Borough = Borough,",
+						"          PU_Zone = Zone,",
+						"          PU_service_zone = service_zone",
+						"     ),",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> SelectOnlyRequiredFields",
+						"Filter2023 select(mapColumn(",
+						"          each(match(position!=7))",
+						"     ),",
+						"     skipDuplicateMapInputs: false,",
+						"     skipDuplicateMapOutputs: false) ~> SelectSNWD",
+						"SelectSNWD cast(output(",
+						"          Date as date 'yyyy-MM-dd'",
+						"     ),",
+						"     errors: true) ~> CastDate",
+						"SelectOnlyRequiredFields, TaxiZoneDataSource lookup(DOLocationID == LocationID,",
+						"     multiple: false,",
+						"     pickup: 'any',",
+						"     broadcast: 'auto')~> LookupTaxiZoneDO",
+						"FillingMissingValues derive(Vendor = case(VendorID==1, \"Creative Mobile Technologies\",\r",
+						"     VendorID==2,\"VeriFone Inc.\",\r",
+						"     'Null'\r",
+						"    ),",
+						"          store_and_fwd_flag = case(store_and_fwd_flag==\"N\", \"N\",     \r",
+						"    store_and_fwd_flag==\"Y\",\"Y\",     \r",
+						"    'Null'    ),",
+						"          Ratecode = case(RatecodeID==1,'Standard rate',\r",
+						"     RatecodeID==2,'JFK',\r",
+						"     RatecodeID==3,'Newark',\r",
+						"     RatecodeID==4,'Nassau or Westchester',\r",
+						"     RatecodeID==5,'Negotiated fare',\r",
+						"     RatecodeID==6,'Group ride',\r",
+						"     \"Null\"\r",
+						"    ),",
+						"          payment_type = case(payment_type==1,'Credit card',     \r",
+						"payment_type==2,'Cash',     \r",
+						"payment_type==3,'No charge',     \r",
+						"payment_type==4,'Dispute',     \r",
+						"payment_type==5,'Unknown',     \r",
+						"payment_type==6,'Voided trip',     \r",
+						"\"Null\"    ),",
+						"          trip_type = case(trip_type==1,'Street-hail',     \r",
+						"trip_type==2,'Dispatch',     \r",
+						"\"Null\"    ),",
+						"          TMAX_Celcius = toDecimal(({TMAX (Degrees Fahrenheit)}-32)/1.8,5,2),",
+						"          TMIN_Celcius = toDecimal(({TMIN (Degrees Fahrenheit)}-32)/1.8, 5,2),",
+						"          TAVG_Celcius = toDecimal(({TMAX (Degrees Fahrenheit)}+{TMIN (Degrees Fahrenheit)})/2,5,2),",
+						"          PRCP_cm = toDecimal({PRCP (Inches)}*2.54,5,2),",
+						"          SNOW_cm = toDecimal({SNOW (Inches)}*2.54,5,2),",
+						"          trip_distance_km = toDecimal(trip_distance*1.609344, 5, 2),",
+						"          Total_Amount_derived = toDecimal(fare_amount+extra+mta_tax+tip_amount+tolls_amount+toInteger(ehail_fee)+improvement_surcharge+congestion_surcharge,5,2)) ~> DerivedColumns",
+						"LookupTaxiZoneDO derive(fare_amount = iifNull(fare_amount, 0, fare_amount),",
+						"          extra = iifNull(extra, 0, extra),",
+						"          mta_tax = iifNull(mta_tax, 0, mta_tax),",
+						"          tip_amount = iifNull(tip_amount, 0, tip_amount),",
+						"          tolls_amount = iifNull(tolls_amount, 0, tolls_amount),",
+						"          ehail_fee = iif(isNull(ehail_fee)==true(), 0, toInteger(ehail_fee)),",
+						"          improvement_surcharge = iifNull(improvement_surcharge, 0, improvement_surcharge),",
+						"          congestion_surcharge = iifNull(congestion_surcharge, 0, congestion_surcharge)) ~> FillingMissingValues",
+						"DerivedColumns select(mapColumn(",
+						"          Vendor,",
+						"          pickup_datetime,",
+						"          dropoff_datetime,",
+						"          travel_time_seconds,",
+						"          store_and_fwd_flag,",
+						"          Ratecode,",
+						"          trip_type,",
+						"          payment_type,",
+						"          passenger_count,",
+						"          trip_distance_km,",
+						"          fare_amount,",
+						"          extra,",
+						"          mta_tax,",
+						"          tip_amount,",
+						"          tolls_amount,",
+						"          ehail_fee,",
+						"          improvement_surcharge,",
+						"          congestion_surcharge,",
+						"          total_amount,",
+						"          Total_Amount_Derived = Total_Amount_derived,",
+						"          date_column,",
+						"          pickup_year,",
+						"          pickup_month,",
+						"          pickup_week_of_year,",
+						"          pickup_day_of_month,",
+						"          pickup_day_of_week,",
+						"          pickup_hour,",
+						"          PU_LocationID = PULocationID,",
+						"          PU_Borough,",
+						"          PU_Zone,",
+						"          PU_service_zone,",
+						"          DO_LocationID = DOLocationID,",
+						"          DO_Borough = Borough,",
+						"          DO_Zone = Zone,",
+						"          DO_service_zone = service_zone,",
+						"          TMAX_Celcius,",
+						"          TMIN_Celcius,",
+						"          TAVG_Celcius,",
+						"          PRCP_cm,",
+						"          SNOW_cm",
+						"     ),",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> RemoveRedundantColumns",
+						"RemoveRedundantColumns cast(output(",
+						"          passenger_count as integer",
+						"     ),",
+						"     errors: true) ~> Cast",
+						"DerivedTimeColumns filter(pickup_year==2023) ~> FilterYear2023",
+						"Cast sink(allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     partitionFileNames:['transformed_data_with_dataflow_january.csv'],",
+						"     truncate: true,",
+						"     umask: 0022,",
+						"     preCommands: [],",
+						"     postCommands: [],",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true,",
+						"     partitionBy('hash', 1)) ~> NycTaxiDataSink"
+					]
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/ds_raw_tripdata_january_parquet')]",
+				"[concat(variables('factoryId'), '/datasets/ds_raw_weather_csv')]",
+				"[concat(variables('factoryId'), '/datasets/ds_raw_taxi_zone_csv')]",
+				"[concat(variables('factoryId'), '/datasets/ds_processed_by_dataflow_csv')]",
+				"[concat(variables('factoryId'), '/linkedServices/ls_adls_uberreportingdl')]"
+			]
+		}
+	]
+}
